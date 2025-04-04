@@ -1,0 +1,200 @@
+{{-- Script de gestion des fichiers --}}
+@push('scripts')
+<script>
+    function fileUpload(configId) {
+        return {
+            files: [],
+            error: null,
+            uploading: false,
+            progress: 0,
+            currentFileName: '',
+            
+            init() {
+                this.loadFiles();
+            },
+
+            async loadFiles() {
+                try {
+                    const response = await fetch(`/api/configurations/${configId}/files/list`);
+                    const data = await response.json();
+                    this.files = data.files.map(file => ({
+                        ...file,
+                        url: '/storage/' + file.path
+                    }));
+                    console.log('Files loaded:', this.files);
+                } catch (error) {
+                    console.error('Error loading files:', error);
+                    this.error = 'Erreur de chargement des fichiers';
+                }
+            },
+
+            async uploadFiles(event) {
+                const files = event.target.files;
+                if (!files.length) return;
+
+                this.uploading = true;
+                this.error = null;
+
+                for (const file of files) {
+                    if (file.size > 10 * 1024 * 1024) {
+                        this.error = `Le fichier ${file.name} est trop volumineux (max 10MB)`;
+                        continue;
+                    }
+
+                    this.currentFileName = file.name;
+                    this.progress = 0;
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    try {
+                        const response = await fetch(`/api/configurations/${configId}/files`, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content
+                            }
+                        });
+                        const data = await response.json();
+                        this.files.push({
+                            ...data.file,
+                            url: '/storage/' + data.file.path
+                        });
+                        this.progress = 100;
+                    } catch (error) {
+                        console.error('Error uploading file:', error);
+                        this.error = `Erreur lors de l'upload de ${file.name}`;
+                    }
+                }
+
+                this.uploading = false;
+                this.currentFileName = '';
+                this.progress = 0;
+                event.target.value = '';
+            },
+
+            async deleteFile(fileId) {
+                if (!confirm('Supprimer ce fichier ?')) return;
+                
+                try {
+                    await fetch(`/api/configurations/${configId}/files/${fileId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content
+                        }
+                    });
+                    this.files = this.files.filter(f => f.id !== fileId);
+                } catch (error) {
+                    console.error('Error deleting file:', error);
+                    this.error = 'Erreur lors de la suppression';
+                }
+            }
+        }
+    }
+</script>
+@endpush
+
+{{-- Vue principale --}}
+<div class="mt-4">
+    @if(!isset($configuration))
+        <div class="p-4 bg-red-100 text-red-700 rounded-lg">
+            Configuration non trouvée.
+        </div>
+    @elseif(!$configuration->is_paid)
+        <div class="p-4 bg-yellow-100 text-yellow-800 rounded-lg">
+            Le devis doit être payé avant de pouvoir uploader des fichiers.
+        </div>
+    @else
+        <div x-data="fileUpload({{ $configuration->id }})" class="p-4 bg-white rounded-lg shadow">
+            <h3 class="text-lg font-semibold mb-4">Fichiers du projet</h3>
+
+            <!-- Message d'erreur -->
+            <div x-show="error" x-text="error" class="mb-4 p-4 bg-red-100 text-red-700 rounded-lg"></div>
+
+            <!-- Upload -->
+            <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <input 
+                    type="file" 
+                    x-ref="fileInput"
+                    @change="uploadFiles($event)"
+                    accept=".png,.jpg,.jpeg,.pdf"
+                    class="hidden"
+                    multiple
+                >
+                <button 
+                    type="button"
+                    @click="$refs.fileInput.click()"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    :class="{ 'opacity-50 cursor-not-allowed': uploading }"
+                    :disabled="uploading"
+                >
+                    <span x-text="uploading ? 'Upload en cours...' : 'Sélectionner des fichiers'"></span>
+                </button>
+                <p class="mt-2 text-sm text-gray-600">PNG, JPG, PDF (max. 10 MB)</p>
+
+                <!-- Barre de progression -->
+                <div x-show="uploading" class="mt-4">
+                    <div x-text="currentFileName" class="text-sm text-gray-600 mb-1"></div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div 
+                            class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                            :style="'width: ' + progress + '%'"
+                        ></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Liste des fichiers -->
+            <div class="mt-4 space-y-2">
+                <template x-for="file in files" :key="file.id">
+                    <div class="flex items-start p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <!-- Aperçu ou lien selon le type -->
+                        <div class="mr-3 flex-shrink-0">
+                            <template x-if="file.mime_type && file.mime_type.startsWith('image/')">
+                                <a :href="file.url" target="_blank">
+                                    <img 
+                                        :src="file.url" 
+                                        :alt="file.original_name"
+                                        class="w-16 h-16 object-cover rounded hover:opacity-75 transition-opacity"
+                                        @error="$el.src = '/images/placeholder.png'"
+                                    >
+                                </a>
+                            </template>
+                            <template x-if="file.mime_type === 'application/pdf'">
+                                <a 
+                                    :href="file.url" 
+                                    target="_blank"
+                                    class="flex items-center justify-center w-16 h-16 bg-red-50 rounded hover:bg-red-100 transition-colors"
+                                >
+                                    <svg class="w-8 h-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M4 18h12a2 2 0 002-2V6.414l-3.707-3.707A1 1 0 0014 2H4a2 2 0 00-2 2v12a2 2 0 002 2zm10-2H6v-1h8v1zm0-3H6v-1h8v1zm0-3H6V9h8v1zm-8-3h4V4h1v3H6V4z"/>
+                                    </svg>
+                                </a>
+                            </template>
+                        </div>
+                        
+                        <!-- Informations du fichier -->
+                        <div class="flex-grow">
+                            <div class="text-sm font-medium" x-text="file.original_name"></div>
+                            <div class="text-xs text-gray-500">
+                                <span x-text="file.mime_type"></span>
+                                <template x-if="file.size">
+                                    <span x-text="'- ' + Math.round(file.size / 1024) + ' Ko'"></span>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Bouton supprimer -->
+                        <button 
+                            type="button"
+                            class="ml-3 text-red-600 hover:text-red-800 transition-colors"
+                            @click="deleteFile(file.id)"
+                        >
+                            Supprimer
+                        </button>
+                    </div>
+                </template>
+            </div>
+        </div>
+    @endif
+</div> 

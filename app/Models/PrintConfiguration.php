@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Carbon\Carbon;
+use App\Enums\PrintConfigurationStatus;
 
 class PrintConfiguration extends Model
 {
@@ -14,18 +15,26 @@ class PrintConfiguration extends Model
         'name',
         'pages',
         'print_type',
-        'paper_type',
-        'format',
         'binding_type',
         'delivery_type',
+        'paper_type',
+        'format',
         'total_price',
-        'is_paid',
+        'status',
+        'step',
+        'is_paid'
     ];
 
     protected $casts = [
-        'pages' => 'integer',
-        'total_price' => 'decimal:2',
+        'status' => 'string',
         'is_paid' => 'boolean',
+        'total_price' => 'decimal:2',
+        'step' => 'integer'
+    ];
+
+    protected $attributes = [
+        'status' => 'pending',
+        'step' => 1
     ];
 
     protected $appends = ['formatted_date', 'formatted_updated_date', 'payment_status'];
@@ -54,6 +63,16 @@ class PrintConfiguration extends Model
 
     public function files(): HasMany
     {
-        return $this->hasMany(ConfigurationFile::class);
+        return $this->hasMany(ConfigurationFile::class, 'print_configuration_id');
+    }
+
+    public function cabinetInfo()
+    {
+        return $this->hasOne(CabinetInfo::class);
+    }
+
+    public function tribunalInfo()
+    {
+        return $this->hasOne(TribunalInfo::class);
     }
 }

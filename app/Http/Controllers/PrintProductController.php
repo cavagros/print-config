@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\PrintConfiguration;
+use App\Models\User;
+use App\Notifications\NewOrderValidated;
+use App\Enums\PrintConfigurationStatus;
 
 class PrintProductController extends Controller
 {
@@ -230,5 +233,258 @@ class PrintProductController extends Controller
 
         return redirect()->route('dashboard')
             ->with('success', 'Configuration supprimée avec succès');
+    }
+
+    public function dashboard()
+    {
+        $configurations = auth()->user()->printConfigurations()
+            ->with('files')  // Chargement des fichiers associés
+            ->latest()      // Les plus récents en premier
+            ->get();
+
+        return view('dashboard', [
+            'configurations' => $configurations
+        ]);
+    }
+
+    public function showFiles(PrintConfiguration $configuration)
+    {
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à voir cette configuration.');
+        }
+
+        return view('configurations.files', [
+            'configuration' => $configuration,
+            'isValidated' => $configuration->status === PrintConfigurationStatus::VALIDATED->value
+        ]);
+    }
+
+    public function showCabinetInfo(PrintConfiguration $configuration)
+    {
+        // Vérifier si l'utilisateur est autorisé
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette configuration.');
+        }
+
+        // Vérifier si les fichiers ont été validés
+        if ($configuration->status !== PrintConfigurationStatus::VALIDATED) {
+            return redirect()->route('configurations.files', $configuration)
+                ->with('error', 'Vous devez d\'abord valider vos fichiers.');
+        }
+
+        // Charger les informations du cabinet si elles existent
+        $cabinetInfo = $configuration->cabinetInfo;
+
+        return view('configurations.cabinet-info', compact('configuration', 'cabinetInfo'));
+    }
+
+    public function saveCabinetInfo(Request $request, PrintConfiguration $configuration)
+    {
+        // Vérifier si l'utilisateur est autorisé
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à modifier cette configuration.');
+        }
+
+        // Valider les données
+        $validated = $request->validate([
+            'cabinet_name' => 'required|string|max:255',
+            'address' => 'required|string|max:255',
+            'postal_code' => 'required|string|max:10',
+            'city' => 'required|string|max:255',
+            'phone' => 'required|string|max:20',
+            'contact_email' => 'required|email|max:255',
+        ], [
+            'required' => 'Le champ :attribute est obligatoire.',
+            'email' => 'L\'adresse email n\'est pas valide.',
+            'max' => 'Le champ :attribute ne doit pas dépasser :max caractères.'
+        ]);
+
+        // Créer ou mettre à jour les informations du cabinet
+        $configuration->cabinetInfo()->updateOrCreate(
+            ['print_configuration_id' => $configuration->id],
+            $validated
+        );
+
+        // Mettre à jour le statut et incrémenter l'étape
+        $configuration->update([
+            'status' => PrintConfigurationStatus::INFO_COMPLETED->value,
+            'step' => 3
+        ]);
+
+        return redirect()->route('configurations.print-options', $configuration)
+            ->with('success', 'Les informations du cabinet ont été enregistrées avec succès.');
+    }
+
+    public function showTribunalInfo(PrintConfiguration $configuration)
+    {
+        // Vérifier si l'utilisateur est autorisé
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette configuration.');
+        }
+
+        // Vérifier si les options d'impression ont été configurées
+        if ($configuration->status !== 'options_completed') {
+            return redirect()->route('configurations.print-options', $configuration)
+                ->with('error', 'Vous devez d\'abord configurer les options d\'impression.');
+        }
+
+        // Charger les informations du tribunal si elles existent
+        $tribunalInfo = $configuration->tribunalInfo;
+
+        return view('configurations.tribunal-info', compact('configuration', 'tribunalInfo'));
+    }
+
+    public function saveTribunalInfo(Request $request, PrintConfiguration $configuration)
+    {
+        // Vérifier si l'utilisateur est autorisé
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à modifier cette configuration.');
+        }
+
+        // Valider les données
+        $validated = $request->validate([
+            'tribunal_name' => 'required|string|max:255',
+            'chamber' => 'nullable|string|max:255',
+            'address' => 'required|string|max:255',
+            'postal_code' => 'required|string|max:10',
+            'city' => 'required|string|max:255',
+            'phone' => 'nullable|string|max:20',
+            'contact_email' => 'nullable|email|max:255',
+        ], [
+            'required' => 'Le champ :attribute est obligatoire.',
+            'email' => 'L\'adresse email n\'est pas valide.',
+            'max' => 'Le champ :attribute ne doit pas dépasser :max caractères.'
+        ]);
+
+        // Créer ou mettre à jour les informations du tribunal
+        $configuration->tribunalInfo()->updateOrCreate(
+            ['print_configuration_id' => $configuration->id],
+            $validated
+        );
+
+        // Mettre à jour le statut et incrémenter l'étape
+        $configuration->update([
+            'status' => PrintConfigurationStatus::DELIVERY_COMPLETED->value,
+            'step' => 4
+        ]);
+
+        return redirect()->route('configurations.summary', $configuration)
+            ->with('success', 'Les informations du tribunal ont été enregistrées avec succès.');
+    }
+
+    public function showSummary(PrintConfiguration $configuration)
+    {
+        // Vérifier si l'utilisateur est autorisé
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette configuration.');
+        }
+
+        // Vérifier si toutes les étapes précédentes ont été complétées
+        if ($configuration->status !== 'delivery_completed') {
+            return redirect()->route('configurations.tribunal-info', $configuration)
+                ->with('error', 'Vous devez d\'abord compléter toutes les étapes précédentes.');
+        }
+
+        return view('configurations.summary', compact('configuration'));
+    }
+
+    public function validateOrder(Request $request, PrintConfiguration $configuration)
+    {
+        // Vérifier si l'utilisateur est autorisé
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à modifier cette configuration.');
+        }
+
+        // Mettre à jour le statut et incrémenter l'étape
+        $configuration->update([
+            'status' => PrintConfigurationStatus::READY_FOR_PAYMENT->value,
+            'step' => 5
+        ]);
+
+        // Notifier tous les administrateurs
+        User::where('is_admin', 1)->get()->each(function ($admin) use ($configuration) {
+            $admin->notify(new NewOrderValidated($configuration));
+        });
+
+        return redirect()->route('configurations.payment', $configuration)
+            ->with('success', 'Votre commande a été validée. Vous pouvez maintenant procéder au paiement.');
+    }
+
+    public function showPrintOptions(PrintConfiguration $configuration)
+    {
+        // Vérifier si l'utilisateur est autorisé
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette configuration.');
+        }
+
+        // Vérifier si les informations du cabinet ont été renseignées
+        if ($configuration->status !== PrintConfigurationStatus::INFO_COMPLETED->value) {
+            return redirect()->route('configurations.cabinet-info', $configuration)
+                ->with('error', 'Vous devez d\'abord renseigner les informations du cabinet.');
+        }
+
+        return view('configurations.print-options', [
+            'configuration' => $configuration,
+            'paperTypes' => array_keys(self::PAPER_PRICES),
+            'formats' => array_keys(self::FORMAT_PRICES),
+            'bindingTypes' => array_keys(self::BINDING_PRICES),
+            'deliveryTypes' => array_keys(self::DELIVERY_PRICES),
+        ]);
+    }
+
+    public function savePrintOptions(Request $request, PrintConfiguration $configuration)
+    {
+        // Vérifier si l'utilisateur est autorisé
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à modifier cette configuration.');
+        }
+
+        // Valider les données
+        $validated = $request->validate([
+            'print_type' => 'required|in:noir_blanc,couleur',
+            'binding_type' => 'required|in:' . implode(',', array_keys(self::BINDING_PRICES)),
+            'delivery_type' => 'required|in:' . implode(',', array_keys(self::DELIVERY_PRICES)),
+            'paper_type' => 'required|in:' . implode(',', array_keys(self::PAPER_PRICES)),
+            'format' => 'required|in:' . implode(',', array_keys(self::FORMAT_PRICES)),
+        ]);
+
+        // Mettre à jour les options d'impression
+        $configuration->update($validated + [
+            'status' => PrintConfigurationStatus::OPTIONS_COMPLETED->value,
+            'step' => 4
+        ]);
+
+        return redirect()->route('configurations.tribunal-info', $configuration)
+            ->with('success', 'Les options d\'impression ont été enregistrées avec succès.');
+    }
+
+    public function showPayment(PrintConfiguration $configuration)
+    {
+        // Vérifier si l'utilisateur est autorisé
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette configuration.');
+        }
+
+        // Vérifier si la commande est prête pour le paiement
+        if ($configuration->status !== PrintConfigurationStatus::READY_FOR_PAYMENT->value) {
+            return redirect()->route('configurations.summary', $configuration)
+                ->with('error', 'Vous devez d\'abord valider votre commande.');
+        }
+
+        return view('configurations.payment', compact('configuration'));
+    }
+
+    public function showCabinetCreate(PrintConfiguration $configuration)
+    {
+        if ($configuration->user_id !== auth()->id()) {
+            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette page.');
+        }
+
+        if ($configuration->status !== 'validated') {
+            return redirect()->route('dossier.files', $configuration)
+                ->with('error', 'Vous devez d\'abord valider vos fichiers.');
+        }
+
+        return view('configurations.cabinet-create', compact('configuration'));
     }
 }

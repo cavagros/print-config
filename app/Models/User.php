@@ -49,4 +49,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(PrintConfiguration::class);
     }
+
+    public function isAdmin(): bool
+    {
+        return $this->is_admin === 1;
+    }
+
+    public function routeNotificationForMail()
+    {
+        return $this->email;
+    }
 }
