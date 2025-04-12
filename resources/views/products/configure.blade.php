@@ -9,8 +9,27 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
-                    <form id="print-config" class="space-y-8" action="{{ route('products.add-to-cart') }}" method="POST">
+                    <form id="print-config" class="space-y-8" action="{{ route('products.save-configuration') }}" method="POST">
                         @csrf
+                        
+                        <input type="hidden" name="name" value="Configuration du {{ now()->format('d/m/Y H:i') }}">
+                        
+                        <!-- Statut d'abonnement -->
+                        @if(auth()->user()->hasActiveSubscription())
+                            <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4">
+                                <div class="flex">
+                                    <div class="flex-shrink-0">
+                                        <svg class="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                        </svg>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="font-medium">Vous êtes abonné !</p>
+                                        <p class="text-sm">Vous bénéficiez d'une réduction de 15% sur tous vos projets.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
                         
                         <!-- Nombre de pages -->
                         <div class="space-y-2">
@@ -48,7 +67,7 @@
                         <!-- Type de papier -->
                         <div class="space-y-2">
                             <label class="block text-sm font-medium">Type de papier</label>
-                            <select name="paper_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <select name="paper_type" id="paper_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                 <option value="standard" {{ !$configuration || $configuration->paper_type === 'standard' ? 'selected' : '' }}>Standard (pas de supplément)</option>
                                 <option value="recycle" {{ $configuration && $configuration->paper_type === 'recycle' ? 'selected' : '' }}>Recyclé (+0,02 € / page)</option>
                                 <option value="premium" {{ $configuration && $configuration->paper_type === 'premium' ? 'selected' : '' }}>Premium (+0,05 € / page)</option>
@@ -59,7 +78,7 @@
                         <!-- Format -->
                         <div class="space-y-2">
                             <label class="block text-sm font-medium">Format</label>
-                            <select name="format" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <select name="format" id="format" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                 <option value="A4" {{ !$configuration || $configuration->format === 'A4' ? 'selected' : '' }}>A4 (standard)</option>
                                 <option value="A3" {{ $configuration && $configuration->format === 'A3' ? 'selected' : '' }}>A3 (+0,50 € / page)</option>
                                 <option value="A5" {{ $configuration && $configuration->format === 'A5' ? 'selected' : '' }}>A5 (-0,05 € / page)</option>
@@ -69,7 +88,7 @@
                         <!-- Type de reliure -->
                         <div class="space-y-2">
                             <label class="block text-sm font-medium">Type de reliure</label>
-                            <select name="binding_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <select name="binding_type" id="binding_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                 <option value="sans_reliure" {{ !$configuration || $configuration->binding_type === 'sans_reliure' ? 'selected' : '' }}>Sans reliure (gratuit)</option>
                                 <option value="agrafage" {{ $configuration && $configuration->binding_type === 'agrafage' ? 'selected' : '' }}>Agrafage (2,00 €)</option>
                                 <option value="spirale" {{ $configuration && $configuration->binding_type === 'spirale' ? 'selected' : '' }}>Spirale (5,00 €)</option>
@@ -80,7 +99,7 @@
                         <!-- Type de dépôt -->
                         <div class="space-y-2">
                             <label class="block text-sm font-medium">Type de dépôt</label>
-                            <select name="delivery_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <select name="delivery_type" id="delivery_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                 <option value="retrait_magasin" {{ !$configuration || $configuration->delivery_type === 'retrait_magasin' ? 'selected' : '' }}>Retrait en magasin (gratuit)</option>
                                 <option value="livraison_standard" {{ $configuration && $configuration->delivery_type === 'livraison_standard' ? 'selected' : '' }}>Livraison standard (5,00 €)</option>
                                 <option value="livraison_express" {{ $configuration && $configuration->delivery_type === 'livraison_express' ? 'selected' : '' }}>Livraison express (15,00 €)</option>
@@ -133,13 +152,9 @@
                                 class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                                 Calculer le prix
                             </button>
-                            <button type="button" onclick="saveConfiguration()" 
-                                class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
-                                Sauvegarder la configuration
-                            </button>
-                            <button type="submit" 
+                            <button type="button" onclick="proceedToPayment()" 
                                 class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
-                                Ajouter au panier
+                                Payer
                             </button>
                         </div>
                     </form>
@@ -178,33 +193,64 @@
                 });
             };
 
-            // Fonction de sauvegarde de la configuration
-            window.saveConfiguration = function() {
-                const formData = new FormData(document.getElementById('print-config'));
-                const configName = document.getElementById('configuration_name').value;
-                const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                
-                if (!configName) {
-                    alert('Veuillez donner un nom à votre configuration');
-                    return;
+            // Fonction pour procéder au paiement
+            window.proceedToPayment = function() {
+                // Vérifier que tous les champs requis sont remplis
+                const requiredFields = ['configuration_name', 'pages', 'print_type', 'binding_type', 'delivery_type', 'paper_type', 'format'];
+                for (const field of requiredFields) {
+                    const element = field === 'print_type' 
+                        ? document.querySelector('input[name="print_type"]:checked')
+                        : document.getElementById(field);
+                    
+                    if (!element || !element.value) {
+                        alert(`Le champ ${field} est requis`);
+                        return;
+                    }
                 }
 
-                fetch('{{ route("products.save-configuration") }}', {
+                // Si le nom n'est pas fourni, générer un nom par défaut
+                const name = document.getElementById('configuration_name').value || `Configuration du ${new Date().toLocaleDateString()}`;
+
+                // Récupérer les valeurs du formulaire
+                const formData = {
+                    name: name,
+                    pages: document.getElementById('pages').value,
+                    print_type: document.querySelector('input[name="print_type"]:checked').value,
+                    binding_type: document.getElementById('binding_type').value,
+                    delivery_type: document.getElementById('delivery_type').value,
+                    paper_type: document.getElementById('paper_type').value,
+                    format: document.getElementById('format').value,
+                    total_price: document.getElementById('estimated-price').textContent.replace(' €', '')
+                };
+
+                // Envoyer les données au serveur
+                fetch('/products/save-configuration', {
                     method: 'POST',
-                    body: formData,
                     headers: {
-                        'X-CSRF-TOKEN': token
-                    }
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(formData)
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.message || 'Erreur lors de la sauvegarde de la configuration');
+                        });
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    alert(data.message);
-                    // Rediriger vers le tableau de bord
-                    window.location.href = '{{ route("dashboard") }}';
+                    if (data.success) {
+                        // Rediriger vers la page de paiement avec l'ID de la configuration
+                        window.location.href = `/payment/${data.configuration_id}`;
+                    } else {
+                        throw new Error(data.message || 'Erreur lors de la sauvegarde de la configuration');
+                    }
                 })
                 .catch(error => {
                     console.error('Erreur:', error);
-                    alert('Erreur lors de la sauvegarde de la configuration');
+                    alert(error.message);
                 });
             };
 

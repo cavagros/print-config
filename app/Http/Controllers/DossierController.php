@@ -11,15 +11,8 @@ class DossierController extends Controller
 {
     public function summary(PrintConfiguration $configuration)
     {
-        // Vérifier si l'utilisateur est autorisé
         if ($configuration->user_id !== auth()->id()) {
-            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette page.');
-        }
-
-        // Vérifier si toutes les informations nécessaires sont présentes
-        if (!$configuration->cabinetInfo || !$configuration->tribunalInfo) {
-            return redirect()->route('dossier.cabinet', $configuration)
-                ->with('error', 'Vous devez d\'abord compléter toutes les informations.');
+            abort(403, 'Vous n\'êtes pas autorisé à voir ce dossier.');
         }
 
         return view('dossier.summary', compact('configuration'));
@@ -27,36 +20,28 @@ class DossierController extends Controller
 
     public function validate(Request $request, PrintConfiguration $configuration)
     {
-        // Vérifier si l'utilisateur est autorisé
         if ($configuration->user_id !== auth()->id()) {
-            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette page.');
+            abort(403, 'Vous n\'êtes pas autorisé à valider ce dossier.');
         }
 
-        // Vérifier si le dossier n'est pas déjà validé
-        if ($configuration->status === 'validated') {
+        try {
+            // Mettre à jour le statut
+            $configuration->update([
+                'status' => 'validated',
+                'step' => 5
+            ]);
+
+            // Notifier les administrateurs
+            User::where('is_admin', true)->get()->each(function ($admin) use ($configuration) {
+                $admin->notify(new DossierValidated($configuration));
+            });
+
             return redirect()->route('dossier.summary', $configuration)
-                ->with('error', 'Ce dossier a déjà été validé.');
+                ->with('success', 'Votre dossier a été validé avec succès et est maintenant en cours de traitement.');
+
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', 'Une erreur est survenue lors de la validation du dossier.');
         }
-
-        // Vérifier si toutes les informations nécessaires sont présentes
-        if (!$configuration->cabinetInfo || !$configuration->tribunalInfo || $configuration->files->count() === 0) {
-            return redirect()->route('dossier.summary', $configuration)
-                ->with('error', 'Le dossier est incomplet. Veuillez vérifier toutes les informations.');
-        }
-
-        // Mettre à jour le statut
-        $configuration->update([
-            'status' => 'validated',
-            'validated_at' => now()
-        ]);
-
-        // Notifier les administrateurs
-        $admins = User::where('is_admin', true)->get();
-        foreach ($admins as $admin) {
-            $admin->notify(new DossierValidated($configuration));
-        }
-
-        return redirect()->route('dossier.summary', $configuration)
-            ->with('success', 'Votre dossier a été validé avec succès et sera traité par nos services.');
     }
 } 

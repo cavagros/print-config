@@ -133,7 +133,7 @@
                     <h3 class="font-medium text-gray-900 flex items-center text-md">
                         <i class="fas fa-file-alt mr-2"></i>Fichiers ({{ $configuration->files->count() }})
                     </h3>
-                    <p class="text-md text-gray-600">{{ $configuration->total_pages ?? 0 }} pages au total</p>
+                    <p class="text-md text-gray-600">{{ $configuration->pages ?? 0 }} pages au total</p>
                 </div>
                 <div class="grid md:grid-cols-2 gap-2">
                     @foreach($configuration->files as $file)
@@ -142,7 +142,14 @@
                                 <i class="fas fa-file-pdf text-red-500 mr-2"></i>
                                 <span class="truncate">{{ $file->original_name }}</span>
                             </div>
-                            <span class="text-gray-500 text-xs ml-2">{{ $file->size_human }}</span>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-gray-500 text-xs">{{ $file->size_human }}</span>
+                                <a href="{{ route('dossier.files.preview', ['configuration' => $configuration, 'file' => $file]) }}" 
+                                   target="_blank"
+                                   class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </div>
                         </div>
                     @endforeach
                 </div>
@@ -154,7 +161,7 @@
                     <form action="{{ route('dossier.validate', $configuration) }}" method="POST">
                         @csrf
                         <div class="space-y-3">
-                            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 text-md">
+                            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 text-sm">
                                 <div class="flex">
                                     <i class="fas fa-exclamation-triangle text-yellow-400 mt-0.5"></i>
                                     <p class="ml-2 text-yellow-700">
@@ -164,7 +171,7 @@
                                 </div>
                             </div>
                             <div class="flex justify-center">
-                                <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-md font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
                                     <i class="fas fa-check-circle mr-2"></i>
                                     Valider définitivement le dossier
                                 </button>
@@ -173,9 +180,24 @@
                     </form>
                 </div>
             @else
-                <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-3 text-md">
-                    <p class="font-medium">Dossier validé</p>
-                    <p>Votre dossier a été validé et est en cours de traitement par nos services.</p>
+                <div class="bg-green-100 border-l-4 border-green-500 p-4 mb-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-check-circle text-green-600"></i>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-green-800 font-medium">Dossier validé</h3>
+                            <div class="mt-2 text-green-700">
+                                <p class="text-sm">
+                                    Votre dossier a été validé et est en cours de traitement par nos services.
+                                    Référence du dossier : {{ $configuration->id_dossier }}
+                                </p>
+                                <p class="text-sm mt-2">
+                                    Date de validation : {{ $configuration->updated_at->format('d/m/Y à H:i') }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             @endif
         </div>

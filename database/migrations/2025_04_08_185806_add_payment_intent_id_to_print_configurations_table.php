@@ -6,18 +6,23 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
         Schema::table('print_configurations', function (Blueprint $table) {
-            // Modifier la colonne status pour accepter des chaînes plus longues
-            $table->string('status', 50)->change();
+            $table->string('payment_intent_id')->nullable()->after('is_paid');
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
         Schema::table('print_configurations', function (Blueprint $table) {
-            $table->string('status', 20)->change();
+            $table->dropColumn('payment_intent_id');
         });
     }
-}; 
+};

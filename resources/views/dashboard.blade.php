@@ -10,10 +10,31 @@
             <!-- Message de bienvenue -->
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
-                    <h3 class="text-lg font-semibold mb-2">👋 Bienvenue dans votre espace d'impression !</h3>
-                    <p class="text-gray-600 dark:text-gray-400">
-                        Ici, vous pouvez gérer vos configurations d'impression et suivre vos commandes.
-                    </p>
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-semibold mb-2">👋 Bienvenue dans votre espace d'impression !</h3>
+                            <p class="text-gray-600 dark:text-gray-400">
+                                Ici, vous pouvez gérer vos configurations d'impression et suivre vos commandes.
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            @if(auth()->user()->hasActiveSubscription())
+                                <div class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Client abonné depuis {{ auth()->user()->activeSubscription()->created_at->format('d/m/Y') }}
+                                </div>
+                            @else
+                                <div class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                    </svg>
+                                    Non abonné
+                                </div>
+                            @endif
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -83,101 +104,129 @@
 
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Mes configurations d'impression</h3>
                     <div class="space-y-4">
-                        @foreach($configurations as $config)
-                        <div class="border dark:border-gray-700 rounded-lg p-4">
-                            <div class="flex justify-between items-start mb-4">
-                                <div>
-                                    <h4 class="text-lg font-medium">{{ $config->name }}</h4>
-                                    <p class="text-sm text-gray-600 dark:text-gray-400">
-                                        Créé le {{ $config->created_at->format('d/m/Y') }}
-                                    </p>
-                                </div>
-                                <div class="text-right">
-                                    <span class="text-lg font-bold">{{ number_format($config->total_price, 2, ',', ' ') }} €</span>
-                                    <div class="mt-1">
-                                        @if($config->is_paid)
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        @foreach($configurations as $configuration)
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-4">
+                <div class="p-6 text-gray-900">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="text-lg font-semibold">{{ $configuration->name }}</h3>
+                                        <p class="text-sm text-gray-500">Créé le {{ $configuration->created_at->format('d/m/Y H:i') }}</p>
+                                        
+                                        @if($configuration->is_paid)
+                                            <div class="mt-2">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                    Payé - {{ number_format($configuration->total_price, 2, ',', ' ') }} €
+                                                </span>
+                                            </div>
+                                        @endif
+
+                                        @if($configuration->is_subscription)
+                                            <div class="mt-2">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                                    @if($configuration->subscription_status === 'active')
+                                                        bg-green-100 text-green-800
+                                                    @elseif($configuration->subscription_status === 'canceled')
+                                                        bg-red-100 text-red-800
+                                                    @else
+                                                        bg-yellow-100 text-yellow-800
+                                                    @endif">
+                                                    @if($configuration->subscription_status === 'active')
+                                                        Abonnement actif jusqu'au {{ \Carbon\Carbon::parse($configuration->subscription_end_date)->format('d/m/Y') }}
+                                                    @elseif($configuration->subscription_status === 'canceled')
+                                                        Abonnement annulé
+                                                    @else
+                                                        État de l'abonnement inconnu
+                                                    @endif
+                                                </span>
+                                            </div>
+                                        @endif
+                                    </div>
+                                    
+                                    <div class="flex space-x-2">
+                                        @if($configuration->is_paid)
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                                 Payé
                                             </span>
                                         @else
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                                                En attente
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                En attente de paiement
                                             </span>
                                         @endif
                                     </div>
                                 </div>
-                            </div>
-
-                            <!-- Barre de progression -->
-                            <div class="mb-4">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex space-x-8">
-                                        <div class="flex items-center">
-                                            <div class="w-8 h-8 rounded-full flex items-center justify-center {{ $config->is_paid ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600' }} text-white">
-                                                1
+                                
+                                <!-- Barre de progression -->
+                                <div class="mb-4">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex space-x-8">
+                                            <div class="flex items-center">
+                                                <div class="w-8 h-8 rounded-full flex items-center justify-center {{ $configuration->is_paid ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600' }} text-white">
+                                                    1
+                                                </div>
+                                                <span class="ml-2 text-sm">Paiement</span>
                                             </div>
-                                            <span class="ml-2 text-sm">Paiement</span>
-                                        </div>
-                                        <div class="flex items-center">
-                                            <div class="w-8 h-8 rounded-full flex items-center justify-center {{ $config->is_paid && $config->files->count() > 0 ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600' }} text-white">
-                                                2
+                                            <div class="flex items-center">
+                                                <div class="w-8 h-8 rounded-full flex items-center justify-center {{ $configuration->is_paid && $configuration->files->count() > 0 ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600' }} text-white">
+                                                    2
+                                                </div>
+                                                <span class="ml-2 text-sm">Fichiers</span>
                                             </div>
-                                            <span class="ml-2 text-sm">Fichiers</span>
-                                        </div>
-                                        <div class="flex items-center">
-                                            <div class="w-8 h-8 rounded-full flex items-center justify-center {{ $config->is_paid && $config->files->count() > 0 && $config->status === 'validated' ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600' }} text-white">
-                                                3
+                                            <div class="flex items-center">
+                                                <div class="w-8 h-8 rounded-full flex items-center justify-center {{ $configuration->is_paid && $configuration->files->count() > 0 && $configuration->status === 'validated' ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600' }} text-white">
+                                                    3
+                                                </div>
+                                                <span class="ml-2 text-sm">Validation</span>
                                             </div>
-                                            <span class="ml-2 text-sm">Validation</span>
-                                        </div>
-                                        <div class="flex items-center">
-                                            <div class="w-8 h-8 rounded-full flex items-center justify-center {{ $config->status === 'completed' ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600' }} text-white">
-                                                4
+                                            <div class="flex items-center">
+                                                <div class="w-8 h-8 rounded-full flex items-center justify-center {{ $configuration->status === 'completed' ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600' }} text-white">
+                                                    4
+                                                </div>
+                                                <span class="ml-2 text-sm">Production</span>
                                             </div>
-                                            <span class="ml-2 text-sm">Production</span>
                                         </div>
                                     </div>
+                                    <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full">
+                                        @php
+                                            $progress = 0;
+                                            if ($configuration->is_paid) $progress += 25;
+                                            if ($configuration->files->count() > 0) $progress += 25;
+                                            if ($configuration->status === 'validated') $progress += 25;
+                                            if ($configuration->status === 'completed') $progress += 25;
+                                        @endphp
+                                        <div class="h-2 bg-green-500 rounded-full transition-all duration-500" style="width: {{ $progress }}%"></div>
+                                    </div>
                                 </div>
-                                <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full">
-                                    @php
-                                        $progress = 0;
-                                        if ($config->is_paid) $progress += 25;
-                                        if ($config->files->count() > 0) $progress += 25;
-                                        if ($config->status === 'validated') $progress += 25;
-                                        if ($config->status === 'completed') $progress += 25;
-                                    @endphp
-                                    <div class="h-2 bg-green-500 rounded-full transition-all duration-500" style="width: {{ $progress }}%"></div>
+
+                                <!-- Actions -->
+                                <div class="flex space-x-4">
+                                    @if(!$configuration->is_paid)
+                                        <a href="{{ route('payment.form', $configuration) }}" class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                                            </svg>
+                                            Payer maintenant
+                                        </a>
+                                    @endif
+                                    
+                                    @if($configuration->is_paid)
+                                        <a href="{{ $configuration->status === 'validated' ? route('dossier.summary', $configuration) : route('dossier.files', $configuration) }}" 
+                                           class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                                            </svg>
+                                            {{ $configuration->status === 'validated' ? 'Voir mon dossier' : 'Gérer les fichiers' }} ({{ $configuration->files->count() }})
+                                        </a>
+                                    @endif
+
+                                    @if(!$configuration->is_paid)
+                                        <a href="#" class="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                            </svg>
+                                            Modifier
+                                        </a>
+                                    @endif
                                 </div>
-                            </div>
-
-                            <!-- Actions -->
-                            <div class="flex space-x-4">
-                                @if(!$config->is_paid)
-                                    <a href="#" class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md">
-                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
-                                        </svg>
-                                        Payer
-                                    </a>
-                                @endif
-                                
-                                @if($config->is_paid)
-                                    <a href="{{ route('dossier.files', $config) }}" class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md">
-                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                                        </svg>
-                                        Gérer les fichiers ({{ $config->files->count() }})
-                                    </a>
-                                @endif
-
-                                @if(!$config->is_paid)
-                                    <a href="#" class="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md">
-                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                        </svg>
-                                        Modifier
-                                    </a>
-                                @endif
                             </div>
                         </div>
                         @endforeach

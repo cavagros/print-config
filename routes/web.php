@@ -6,13 +6,14 @@ use App\Http\Controllers\ConfigurationFileController;
 use App\Http\Controllers\CabinetController;
 use App\Http\Controllers\TribunalController;
 use App\Http\Controllers\DossierController;
+use App\Http\Controllers\PaymentController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/dashboard', [PrintProductController::class, 'dashboard'])->name('dashboard');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -68,7 +69,20 @@ Route::middleware(['auth'])->group(function () {
     // Route pour les options d'impression
     Route::get('/dossier/{configuration}/print-options', [PrintProductController::class, 'showPrintOptions'])->name('dossier.print-options');
     Route::post('/dossier/{configuration}/print-options', [PrintProductController::class, 'savePrintOptions'])->name('dossier.save-print-options');
+
+    // Routes de paiement
+    Route::get('/payment/{configuration}', [PaymentController::class, 'showPaymentForm'])->name('payment.form');
+    Route::post('/payment/{configuration}/create', [PaymentController::class, 'createPaymentIntent'])->name('payment.create');
+    Route::post('/payment/{configuration}/subscription', [PaymentController::class, 'createSubscription'])->name('payment.subscription');
+    Route::get('/payment/{configuration}/success', [PaymentController::class, 'success'])->name('payment.success');
+    Route::get('/payment/{configuration}/cancel', [PaymentController::class, 'cancel'])->name('payment.cancel');
+    Route::get('/payment/{configuration}/subscription-status', [PaymentController::class, 'checkSubscriptionStatus'])
+        ->name('payment.subscription-status')
+        ->middleware(['auth']);
 });
+
+// Webhook route - must be outside auth middleware
+Route::post('/webhook/stripe', [PaymentController::class, 'handleWebhook'])->name('payment.webhook');
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/configurations', [App\Http\Controllers\Admin\PrintConfigurationController::class, 'index'])

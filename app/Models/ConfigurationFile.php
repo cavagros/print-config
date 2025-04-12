@@ -13,7 +13,8 @@ class ConfigurationFile extends Model
         'file_path',
         'mime_type',
         'size',
-        'order'
+        'order',
+        'id_dossier',
     ];
 
     public function printConfiguration(): BelongsTo

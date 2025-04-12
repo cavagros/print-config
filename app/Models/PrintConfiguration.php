@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Carbon\Carbon;
 use App\Enums\PrintConfigurationStatus;
 
@@ -13,28 +14,30 @@ class PrintConfiguration extends Model
     protected $fillable = [
         'user_id',
         'name',
-        'pages',
-        'print_type',
-        'binding_type',
-        'delivery_type',
-        'paper_type',
-        'format',
         'total_price',
         'status',
         'step',
-        'is_paid'
+        'is_paid',
+        'is_subscription',
+        'subscription_id',
+        'subscription_status',
+        'id_dossier',
+        'pages'
     ];
 
     protected $casts = [
-        'status' => 'string',
-        'is_paid' => 'boolean',
         'total_price' => 'decimal:2',
-        'step' => 'integer'
+        'is_paid' => 'boolean',
+        'is_subscription' => 'boolean',
+        'step' => 'integer',
+        'paid_at' => 'datetime'
     ];
 
     protected $attributes = [
         'status' => 'pending',
-        'step' => 1
+        'step' => 1,
+        'is_paid' => false,
+        'is_subscription' => false,
     ];
 
     protected $appends = ['formatted_date', 'formatted_updated_date', 'payment_status'];
@@ -74,5 +77,17 @@ class PrintConfiguration extends Model
     public function tribunalInfo()
     {
         return $this->hasOne(TribunalInfo::class);
+    }
+
+    public function subscription(): HasOne
+    {
+        return $this->hasOne(Subscription::class);
+    }
+
+    public function hasActiveSubscription(): bool
+    {
+        return $this->is_subscription && 
+               $this->subscription && 
+               $this->subscription->isActive();
     }
 }
