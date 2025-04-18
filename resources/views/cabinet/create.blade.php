@@ -2,7 +2,7 @@
     <x-slot name="header">
         <div class="flex justify-between items-center">
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                Informations du cabinet
+                Informations du cabinet - {{ $configuration->name }}
             </h2>
             <a href="{{ route('dossier.files', $configuration) }}" class="text-gray-600 hover:text-gray-900">
                 <i class="fas fa-arrow-left mr-2"></i> Retour aux fichiers

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Subscription;
 use Laravel\Cashier\Cashier;
 use App\Models\Payment;
+use App\Services\PriceCalculator;
 
 class PaymentController extends Controller
 {
@@ -25,12 +26,27 @@ class PaymentController extends Controller
             return redirect()->route('dashboard')->with('error', 'Ce dossier a déjà été payé.');
         }
 
-        $user = auth()->user();
-        $hasActiveSubscription = $user->subscriptions()
+        // Utiliser l'utilisateur cible de la configuration
+        $targetUser = $configuration->user;
+        $hasActiveSubscription = $targetUser->subscriptions()
             ->where('stripe_status', 'active')
             ->exists();
 
-        $originalPrice = $configuration->total_price;
+        // Recalculer le prix en fonction des paramètres actuels
+        $priceCalculator = new PriceCalculator();
+        $totalPrice = $priceCalculator->calculateTotalPrice(
+            $configuration->pages,
+            $configuration->print_type,
+            $configuration->binding_type,
+            $configuration->delivery_type,
+            $configuration->paper_type,
+            $configuration->format
+        );
+
+        // Mettre à jour le prix dans la configuration
+        $configuration->update(['total_price' => $totalPrice]);
+
+        $originalPrice = $totalPrice;
         $subscriptionPrice = $originalPrice * 0.85; // 15% de réduction
 
         return view('payment.form', compact('configuration', 'originalPrice', 'subscriptionPrice', 'hasActiveSubscription'));
@@ -48,10 +64,12 @@ class PaymentController extends Controller
                 'payment_method_id' => 'required|string'
             ]);
 
-            $user = $request->user();
             $printConfiguration = PrintConfiguration::findOrFail($request->print_configuration_id);
-
-            // Vérifier si l'utilisateur a déjà un abonnement actif
+            
+            // Utiliser le propriétaire de la configuration pour le paiement
+            $user = $printConfiguration->user;
+            
+            // Vérifier si le propriétaire a un abonnement actif
             $hasActiveSubscription = $user->subscriptions()
                 ->where('stripe_status', 'active')
                 ->exists();
@@ -66,7 +84,7 @@ class PaymentController extends Controller
 
             // Créer le paiement dans la base de données
             $payment = Payment::create([
-                'user_id' => $user->id,
+                'user_id' => $user->id, // Utiliser l'ID du propriétaire
                 'print_configuration_id' => $printConfiguration->id,
                 'amount' => $amount / 100, // Convertir en euros pour la base de données
                 'currency' => 'eur',
@@ -117,6 +135,11 @@ class PaymentController extends Controller
             $printConfiguration->update([
                 'is_paid' => false,
                 'status' => 'pending',
+                'payment_intent_id' => $paymentIntent->id
+            ]);
+
+            \Log::info('Configuration mise à jour avec payment_intent_id', [
+                'configuration_id' => $printConfiguration->id,
                 'payment_intent_id' => $paymentIntent->id
             ]);
 
@@ -409,10 +432,10 @@ class PaymentController extends Controller
                 'payment_method_id' => 'required|string'
             ]);
 
-            $user = $request->user();
             $printConfiguration = PrintConfiguration::findOrFail($request->print_configuration_id);
+            $user = $printConfiguration->user; // Utiliser l'utilisateur cible de la configuration
 
-            // Vérifier si l'utilisateur a déjà un abonnement actif
+            // Vérifier si l'utilisateur cible a déjà un abonnement actif
             $hasActiveSubscription = $user->subscriptions()
                 ->where('stripe_status', 'active')
                 ->exists();

@@ -24,7 +24,14 @@
                             </div>
                             <div class="sm:col-span-1">
                                 <dt class="text-sm font-medium text-gray-500">Prix total</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ number_format($configuration->total_price, 2, ',', ' ') }} €</dd>
+                                <dd class="mt-1 text-sm text-gray-900">
+                                    @if($configuration->user->hasActiveSubscription())
+                                        {{ number_format($configuration->total_price * 0.85, 2, ',', ' ') }} €
+                                        <span class="text-sm text-gray-500 line-through">{{ number_format($configuration->total_price, 2, ',', ' ') }} €</span>
+                                    @else
+                                        {{ number_format($configuration->total_price, 2, ',', ' ') }} €
+                                    @endif
+                                </dd>
                             </div>
                             <div class="sm:col-span-2">
                                 <dt class="text-sm font-medium text-gray-500">Statut</dt>

@@ -11,9 +11,12 @@ class DossierController extends Controller
 {
     public function summary(PrintConfiguration $configuration)
     {
-        if ($configuration->user_id !== auth()->id()) {
+        if ($configuration->user_id !== auth()->id() && !auth()->user()->is_admin) {
             abort(403, 'Vous n\'êtes pas autorisé à voir ce dossier.');
         }
+
+        // Charger explicitement les relations
+        $configuration->load(['cabinetInfo', 'tribunalInfo', 'files']);
 
         return view('dossier.summary', compact('configuration'));
     }

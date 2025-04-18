@@ -12,12 +12,13 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->validateCsrfTokens(except: [
-
             'stripe/*',
             'webhook/stripe',
-    
         ]);
-        //
+        
+        $middleware->alias([
+            'admin' => \App\Http\Middleware\AdminMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

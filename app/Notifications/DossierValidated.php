@@ -28,11 +28,14 @@ class DossierValidated extends Notification implements ShouldQueue
     {
         $url = route('admin.dossiers.show', $this->configuration);
 
+        $cabinetName = $this->configuration->cabinetInfo ? $this->configuration->cabinetInfo->cabinet_name : 'Non renseigné';
+        $tribunalName = $this->configuration->tribunalInfo ? $this->configuration->tribunalInfo->tribunal_name : 'Non renseigné';
+
         return (new MailMessage)
             ->subject('Nouveau dossier à traiter')
             ->line('Un nouveau dossier a été validé et nécessite votre attention.')
-            ->line('Cabinet : ' . $this->configuration->cabinetInfo->cabinet_name)
-            ->line('Tribunal : ' . $this->configuration->tribunalInfo->tribunal_name)
+            ->line('Cabinet : ' . $cabinetName)
+            ->line('Tribunal : ' . $tribunalName)
             ->line('Nombre de fichiers : ' . $this->configuration->files->count())
             ->action('Voir le dossier', $url)
             ->line('Merci de traiter ce dossier dans les plus brefs délais.');
@@ -40,10 +43,13 @@ class DossierValidated extends Notification implements ShouldQueue
 
     public function toArray($notifiable)
     {
+        $cabinetName = $this->configuration->cabinetInfo ? $this->configuration->cabinetInfo->cabinet_name : 'Non renseigné';
+        $tribunalName = $this->configuration->tribunalInfo ? $this->configuration->tribunalInfo->tribunal_name : 'Non renseigné';
+
         return [
             'configuration_id' => $this->configuration->id,
-            'cabinet_name' => $this->configuration->cabinetInfo->cabinet_name,
-            'tribunal_name' => $this->configuration->tribunalInfo->tribunal_name,
+            'cabinet_name' => $cabinetName,
+            'tribunal_name' => $tribunalName,
             'files_count' => $this->configuration->files->count(),
         ];
     }

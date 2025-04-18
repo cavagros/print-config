@@ -56,23 +56,55 @@ class PrintProductController extends Controller
     public function configure(Request $request)
     {
         $configuration = null;
-        if ($request->has('config')) {
-            $configuration = PrintConfiguration::findOrFail($request->config);
-            // Vérifier que l'utilisateur est propriétaire de la configuration
-            if ($configuration->user_id !== auth()->id()) {
+        if ($request->has('configuration_id')) {
+            $configuration = PrintConfiguration::findOrFail($request->configuration_id);
+            // Vérifier que l'utilisateur est propriétaire de la configuration ou est admin
+            if ($configuration->user_id !== auth()->id() && !auth()->user()->is_admin) {
                 abort(403);
             }
         }
 
+        // Vérifier l'abonnement du propriétaire de la configuration
+        $owner = $configuration ? $configuration->user : auth()->user();
+        
+        // Log pour déboguer
+        \Log::info('Vérification abonnement', [
+            'user_id' => $owner->id,
+            'is_admin' => auth()->user()->is_admin,
+            'configuration_id' => $configuration ? $configuration->id : null,
+            'configuration_owner_id' => $configuration ? $configuration->user_id : null
+        ]);
+
+        // Vérifier l'abonnement de manière plus détaillée
+        $subscription = $owner->subscriptions()
+            ->where('stripe_status', 'active')
+            ->first();
+
+        $hasSubscription = (bool) $subscription;
+
+        // Log supplémentaire pour voir le résultat
+        \Log::info('Résultat vérification abonnement', [
+            'has_subscription' => $hasSubscription,
+            'subscription_status' => $subscription ? $subscription->stripe_status : null
+        ]);
+
+        // Déterminer l'étape actuelle
+        $step = $request->input('step', 1);
+
         return view('products.configure', [
             'paperTypes' => array_keys(self::PAPER_PRICES),
             'formats' => array_keys(self::FORMAT_PRICES),
-            'configuration' => $configuration
+            'configuration' => $configuration,
+            'hasSubscription' => $hasSubscription,
+            'targetUserId' => auth()->id(),
+            'step' => $step
         ]);
     }
 
     public function calculate(Request $request)
     {
+        \Log::info('Début du calcul du prix', $request->all());
+
         $request->validate([
             'pages' => 'required|integer|min:1',
             'print_type' => 'required|in:noir_blanc,couleur',
@@ -80,48 +112,76 @@ class PrintProductController extends Controller
             'delivery_type' => 'required|in:retrait_magasin,livraison_standard,livraison_express',
             'paper_type' => 'required|in:standard,recycle,premium,photo',
             'format' => 'required|in:A4,A3,A5',
+            'target_user_id' => 'required|exists:users,id'
         ]);
+
+        $targetUser = User::findOrFail($request->target_user_id);
+        $hasSubscription = $targetUser->hasActiveSubscription() || $targetUser->isAdmin();
 
         // Calcul du prix de base par page
         $basePagePrice = self::PRICE_PER_PAGE[$request->print_type];
+        \Log::info('Prix de base par page:', ['print_type' => $request->print_type, 'price' => $basePagePrice]);
         
         // Ajout du prix du papier spécial
         $basePagePrice += self::PAPER_PRICES[$request->paper_type];
+        \Log::info('Prix après ajout du papier:', ['paper_type' => $request->paper_type, 'price' => $basePagePrice]);
         
         // Ajout du prix du format
         $basePagePrice += self::FORMAT_PRICES[$request->format];
+        \Log::info('Prix après ajout du format:', ['format' => $request->format, 'price' => $basePagePrice]);
 
         // Calcul du prix total des pages
         $pagePrice = $basePagePrice * $request->pages;
+        \Log::info('Prix total des pages:', ['pages' => $request->pages, 'price' => $pagePrice]);
 
         // Application des réductions par quantité
-        $discount = 0;
+        $quantityDiscount = 0;
         foreach (self::QUANTITY_DISCOUNTS as $threshold => $discountRate) {
             if ($request->pages >= $threshold) {
-                $discount = $discountRate;
+                $quantityDiscount = $discountRate;
             }
         }
+        \Log::info('Réduction quantité appliquée:', ['discount' => $quantityDiscount]);
 
-        // Prix après réduction
-        $pagePrice = $pagePrice * (1 - $discount);
+        // Prix après réduction quantité
+        $pagePrice = $pagePrice * (1 - $quantityDiscount);
+        \Log::info('Prix après réduction quantité:', ['price' => $pagePrice]);
 
         // Ajout du prix de la reliure
         $bindingPrice = self::BINDING_PRICES[$request->binding_type];
+        \Log::info('Prix de la reliure:', ['binding_type' => $request->binding_type, 'price' => $bindingPrice]);
 
         // Ajout du prix de la livraison
         $deliveryPrice = self::DELIVERY_PRICES[$request->delivery_type];
+        \Log::info('Prix de la livraison:', ['delivery_type' => $request->delivery_type, 'price' => $deliveryPrice]);
 
         // Prix total
         $totalPrice = $pagePrice + $bindingPrice + $deliveryPrice;
+        \Log::info('Prix total avant réduction abonnement:', ['price' => $totalPrice]);
+
+        // Appliquer la réduction d'abonnement uniquement si is_subscription est true dans la requête
+        $subscriptionDiscount = 0;
+        if ($hasSubscription && $request->input('is_subscription') === 'true') {
+            $subscriptionDiscount = 0.15; // 15% de réduction
+            $totalPrice = $totalPrice * 0.85;
+            \Log::info('Réduction abonnement appliquée:', ['price' => $totalPrice]);
+        }
+
+        // S'assurer que le prix n'est jamais inférieur à 0
+        $totalPrice = max(0, $totalPrice);
+        \Log::info('Prix final:', ['price' => $totalPrice]);
 
         return response()->json([
-            'price' => number_format($totalPrice, 2),
+            'price' => $totalPrice,
             'details' => [
-                'pages' => number_format($pagePrice, 2),
-                'binding' => number_format($bindingPrice, 2),
-                'delivery' => number_format($deliveryPrice, 2),
-                'discount_applied' => $discount * 100 . '%',
-                'price_per_page' => number_format($basePagePrice, 2),
+                'pages' => $basePagePrice * $request->pages, // Prix total avant remise
+                'binding' => $bindingPrice,
+                'delivery' => $deliveryPrice,
+                'quantity_discount' => $quantityDiscount * 100 . '%',
+                'quantity_discount_amount' => number_format(($basePagePrice * $request->pages) * $quantityDiscount, 2, '.', '') . ' €',
+                'subscription_discount' => $subscriptionDiscount * 100 . '%',
+                'subscription_discount_amount' => $subscriptionDiscount > 0 ? number_format(($pagePrice + $bindingPrice + $deliveryPrice) * $subscriptionDiscount, 2, '.', '') . ' €' : '0.00 €',
+                'price_per_page' => $basePagePrice,
             ]
         ]);
     }
@@ -164,17 +224,25 @@ class PrintProductController extends Controller
         return implode('-', $parts);
     }
 
-    public function saveConfiguration(Request $request)
+    public function store(Request $request)
     {
         try {
-            $user = auth()->user();
+            // Récupérer l'utilisateur cible
+            $targetUser = User::findOrFail($request->target_user_id);
             
             // Valider les données
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'total_price' => 'required|string',
                 'is_subscription' => 'boolean',
-                'pages' => 'required|integer|min:1'
+                'pages' => 'required|integer|min:1',
+                'print_type' => 'required|in:noir_blanc,couleur',
+                'binding_type' => 'required|in:agrafage,spirale,dos_colle,sans_reliure',
+                'delivery_type' => 'required|in:retrait_magasin,livraison_standard,livraison_express',
+                'paper_type' => 'required|in:standard,recycle,premium,photo',
+                'format' => 'required|in:A4,A3,A5',
+                'configuration_id' => 'nullable|exists:print_configurations,id',
+                'target_user_id' => 'required|exists:users,id'
             ]);
 
             // Nettoyer et convertir le prix
@@ -187,17 +255,47 @@ class PrintProductController extends Controller
                 $totalPrice = $totalPrice * 0.85;
             }
 
-            // Créer la configuration avec le prix en euros
-            $configuration = $user->printConfigurations()->create([
+            // Si une configuration_id est fournie, mettre à jour la configuration existante
+            if ($request->has('configuration_id')) {
+                $configuration = PrintConfiguration::findOrFail($request->configuration_id);
+                
+                // Vérifier que l'utilisateur est autorisé à modifier cette configuration
+                if ($configuration->user_id !== $targetUser->id) {
+                    abort(403, 'Vous n\'êtes pas autorisé à modifier cette configuration.');
+                }
+
+                $configuration->update([
+                    'total_price' => $totalPrice / 100,
+                    'is_subscription' => $validated['is_subscription'] ?? false,
+                    'pages' => $validated['pages'],
+                    'status' => 'pending',
+                    'print_type' => $validated['print_type'],
+                    'binding_type' => $validated['binding_type'],
+                    'delivery_type' => $validated['delivery_type'],
+                    'paper_type' => $validated['paper_type'],
+                    'format' => $validated['format']
+                ]);
+
+                return redirect()->route('payment.form', ['configuration' => $configuration->id]);
+            }
+
+            // Créer une nouvelle configuration
+            $configuration = $targetUser->printConfigurations()->create([
                 'name' => $validated['name'],
-                'total_price' => $totalPrice / 100,  //prix est déjà en euros
+                'total_price' => $totalPrice / 100,
                 'is_subscription' => $validated['is_subscription'] ?? false,
                 'pages' => $validated['pages'],
-                'status' => 'pending'
+                'status' => 'pending',
+                'id_dossier' => $this->gen_dossier_id(),
+                'print_type' => $validated['print_type'],
+                'binding_type' => $validated['binding_type'],
+                'delivery_type' => $validated['delivery_type'],
+                'paper_type' => $validated['paper_type'],
+                'format' => $validated['format']
             ]);
 
             \Log::info('Configuration créée', [
-                'user_id' => $user->id,
+                'user_id' => $targetUser->id,
                 'configuration_id' => $configuration->id,
                 'total_price' => $totalPrice,
                 'is_subscription' => $validated['is_subscription'] ?? false,
@@ -205,21 +303,20 @@ class PrintProductController extends Controller
                 'discount_applied' => ($validated['is_subscription'] ?? false) ? '15%' : '0%'
             ]);
 
-            return response()->json([
-                'success' => true,
-                'configuration' => $configuration,
-                'configuration_id' => $configuration->id
-            ]);
-
+            return redirect()->route('payment.form', ['configuration' => $configuration->id]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()
+                ->withErrors($e->errors())
+                ->withInput();
         } catch (\Exception $e) {
-            \Log::error('Erreur lors de la sauvegarde de la configuration', [
+            \Log::error('Erreur lors de la création/mise à jour de la configuration', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            return response()->json([
-                'success' => false,
-                'error' => 'Une erreur est survenue lors de la sauvegarde de la configuration: ' . $e->getMessage()
-            ], 500);
+
+            return redirect()->back()
+                ->with('error', 'Une erreur est survenue lors de la création/mise à jour de la configuration.')
+                ->withInput();
         }
     }
 

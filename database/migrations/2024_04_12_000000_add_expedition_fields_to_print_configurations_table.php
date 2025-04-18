@@ -12,7 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('print_configurations', function (Blueprint $table) {
-            $table->unsignedTinyInteger('step')->default(1)->after('status');
+            $table->string('expe_suivi')->nullable();
+            $table->timestamp('date_expedition')->nullable();
+            $table->boolean('livre')->default(false);
+            $table->timestamp('date_livraison')->nullable();
         });
     }
 
@@ -22,7 +25,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('print_configurations', function (Blueprint $table) {
-            $table->dropColumn('step');
+            $table->dropColumn(['expe_suivi', 'date_expedition', 'livre', 'date_livraison']);
         });
     }
 }; 

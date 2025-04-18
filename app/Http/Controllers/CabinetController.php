@@ -9,30 +9,17 @@ class CabinetController extends Controller
 {
     public function create(PrintConfiguration $configuration)
     {
-        // Vérifier si l'utilisateur est autorisé
-        if ($configuration->user_id !== auth()->id()) {
-            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette page.');
-        }
-
-        // Vérifier si les fichiers sont validés
-        if ($configuration->status !== 'file_sent') {
-            return redirect()->route('dossier.files', $configuration)
-                ->with('error', 'Vous devez d\'abord valider vos fichiers.');
-        }
-
         // Récupérer les informations existantes du cabinet
         $cabinetInfo = $configuration->cabinetInfo;
 
-        return view('cabinet.create', compact('configuration', 'cabinetInfo'));
+        return view('cabinet.create', [
+            'configuration' => $configuration,
+            'cabinetInfo' => $cabinetInfo
+        ]);
     }
 
     public function store(Request $request, PrintConfiguration $configuration)
     {
-        // Vérifier si l'utilisateur est autorisé
-        if ($configuration->user_id !== auth()->id()) {
-            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette page.');
-        }
-
         // Valider les données
         $validated = $request->validate([
             'cabinet_name' => 'required|string|max:255',
@@ -49,7 +36,7 @@ class CabinetController extends Controller
             $validated
         );
 
-        // Rediriger vers la page du tribunal
+        // Rediriger vers le formulaire du tribunal
         return redirect()->route('dossier.tribunal', $configuration)
             ->with('success', 'Les informations du cabinet ont été enregistrées avec succès.');
     }

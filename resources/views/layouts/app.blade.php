@@ -12,11 +12,13 @@
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
+        <!-- Alpine.js -->
+        <script src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         
         <!-- Styles -->
-        @livewireStyles
         @stack('styles')
     </head>
     <body class="font-sans antialiased">
@@ -24,17 +26,21 @@
             @include('layouts.navigation')
 
             <!-- Page Heading -->
-            @isset($header)
+            @if (isset($header))
                 <header class="bg-white shadow">
                     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                         {{ $header }}
                     </div>
                 </header>
-            @endisset
+            @endif
 
             <!-- Page Content -->
             <main>
-                {{ $slot }}
+                @hasSection('content')
+                    @yield('content')
+                @else
+                    {{ $slot }}
+                @endif
             </main>
         </div>
 

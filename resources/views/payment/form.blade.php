@@ -109,12 +109,37 @@
                                                 </div>
                                                 <div id="card-errors" class="mt-2 text-sm text-red-600" role="alert"></div>
                                             </div>
+
+                                            <!-- Conditions générales de vente -->
+                                            <div class="mt-6">
+                                                <div class="bg-gray-50 rounded-lg">
+                                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                                        Conditions générales de vente
+                                                    </label>
+                                                    <textarea class="w-full h-40 p-2 text-sm border rounded-md mb-4" readonly>
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+
+Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
+                                                    </textarea>
+                                                    <div class="flex items-center">
+                                                        <input type="checkbox" id="accept-cgv" name="accept-cgv" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                                        <label for="accept-cgv" class="ml-2 block text-sm text-gray-900">
+                                                            J'accepte les conditions générales de vente
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <!-- Bouton de paiement -->
                                         <div class="mt-6">
                                             <button type="submit" id="submit-button"
-                                                    class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                                    class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    disabled>
                                                 <span id="button-text">Payer</span>
                                                 <div id="spinner" class="hidden">
                                                     <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -191,6 +216,12 @@
             const submitButton = document.getElementById('submit-button');
             const buttonText = document.getElementById('button-text');
             const spinner = document.getElementById('spinner');
+            const acceptCgvCheckbox = document.getElementById('accept-cgv');
+
+            // Gérer l'état du bouton en fonction de la checkbox
+            acceptCgvCheckbox.addEventListener('change', function() {
+                submitButton.disabled = !this.checked;
+            });
 
             card.addEventListener('change', function(event) {
                 const displayError = document.getElementById('card-errors');

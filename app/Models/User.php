@@ -55,7 +55,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->is_admin === 1;
+        return (bool) $this->is_admin;
     }
 
     public function routeNotificationForMail()
@@ -72,8 +72,10 @@ class User extends Authenticatable
     {
         return $this->subscriptions()
             ->where('stripe_status', 'active')
-            ->whereNull('ends_at')
-            ->orWhere('ends_at', '>', now())
+            ->where(function($query) {
+                $query->whereNull('ends_at')
+                      ->orWhere('ends_at', '>', now());
+            })
             ->first();
     }
 

@@ -6,135 +6,139 @@ use App\Models\PrintConfiguration;
 use App\Models\ConfigurationFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use App\Enums\PrintConfigurationStatus;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ConfigurationFileController extends Controller
 {
-    use AuthorizesRequests;
-
     public function show(PrintConfiguration $configuration)
     {
-        if ($configuration->user_id !== auth()->id()) {
-            abort(403, 'Vous n\'êtes pas autorisé à voir ces fichiers.');
-        }
+        $files = $configuration->files()
+            ->orderBy('order')
+            ->get()
+            ->map(function ($file) {
+                return [
+                    'id' => $file->id,
+                    'original_name' => $file->original_name,
+                    'size_human' => $this->formatBytes($file->size),
+                    'preview_url' => Storage::url($file->file_path),
+                    'order' => $file->order
+                ];
+            });
 
-        $files = $configuration->files()->orderBy('order')->get()->map(function ($file) use ($configuration) {
-            return [
-                'id' => $file->id,
-                'original_name' => $file->original_name,
-                'size_human' => $this->formatBytes($file->size),
-                'preview_url' => route('dossier.files.preview', ['configuration' => $configuration->id, 'file' => $file->id]),
-                'order' => $file->order
-            ];
-        });
-
-        $isValidated = $configuration->status === 'file_sent';
-
-        return view('dossier.files', compact('configuration', 'files', 'isValidated'));
+        return view('dossier.files', [
+            'configuration' => $configuration,
+            'files' => $files,
+            'isValidated' => $configuration->status === 'file_sent' || $configuration->is_locked
+        ]);
     }
 
     public function store(Request $request, PrintConfiguration $configuration)
     {
-        if ($configuration->status === 'file_sent') {
-            return response()->json([
-                'error' => 'Vous avez validé l\'envoi de vos fichiers et ne pouvez plus effectuer de modifications.'
-            ], 422);
+        if ($configuration->status === 'file_sent' || $configuration->is_locked) {
+            return back()->with('error', 'Les fichiers ont été validés et ne peuvent plus être modifiés.');
         }
 
-        if ($configuration->user_id !== auth()->id()) {
-            return response()->json([
-                'error' => 'Vous n\'êtes pas autorisé à modifier ces fichiers.'
-            ], 403);
+        if ($configuration->hasReachedMaxFiles()) {
+            return back()->with('error', 'Le nombre maximum de fichiers (5) a été atteint.');
         }
 
         $request->validate([
-            'file' => 'required|file|max:10240|mimes:pdf,doc,docx,jpg,jpeg,png'
+            'files.*' => 'required|file|max:10240|mimes:pdf,doc,docx,jpg,jpeg,png'
         ]);
 
-        $file = $request->file('file');
-        
-        $configFile = ConfigurationFile::create([
-            'print_configuration_id' => $configuration->id,
-            'original_name' => $file->getClientOriginalName(),
-            'file_path' => $file->store('files', 'public'),
-            'mime_type' => $file->getMimeType(),
-            'size' => $file->getSize(),
-            'order' => $configuration->files()->count() + 1
-        ]);
+        try {
+            $files = $request->file('files');
+            $uploadedCount = 0;
 
-        return response()->json([
-            'message' => 'Fichier uploadé avec succès',
-            'file' => [
-                'id' => $configFile->id,
-                'original_name' => $configFile->original_name,
-                'size_human' => $this->formatBytes($configFile->size),
-                'preview_url' => route('dossier.files.preview', ['configuration' => $configuration->id, 'file' => $configFile->id]),
-                'order' => $configFile->order
-            ]
-        ]);
+            foreach ($files as $file) {
+                if ($configuration->hasReachedMaxFiles()) {
+                    break;
+                }
+
+                $originalName = $file->getClientOriginalName();
+                $extension = $file->getClientOriginalExtension();
+                $size = $file->getSize();
+
+                $directory = $configuration->getFilesDirectory();
+                if (!Storage::disk('public')->exists($directory)) {
+                    Storage::disk('public')->makeDirectory($directory);
+                }
+
+                $fileName = Str::random(40) . '.' . $extension;
+                $path = $file->storeAs($directory, $fileName, 'public');
+
+                $configuration->files()->create([
+                    'original_name' => $originalName,
+                    'file_path' => $path,
+                    'mime_type' => $file->getMimeType(),
+                    'size' => $size,
+                    'order' => $configuration->getFilesCount() + 1
+                ]);
+
+                $uploadedCount++;
+            }
+
+            if ($uploadedCount > 0) {
+                return back()->with('success', $uploadedCount . ' fichier(s) uploadé(s) avec succès');
+            }
+
+            return back()->with('error', 'Aucun fichier n\'a pu être uploadé');
+
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de l\'upload des fichiers : ' . $e->getMessage());
+            return back()->with('error', 'Une erreur est survenue lors de l\'upload des fichiers');
+        }
     }
 
     public function destroy(PrintConfiguration $configuration, ConfigurationFile $file)
     {
-        if ($configuration->status === 'file_sent') {
-            return response()->json([
-                'error' => 'Vous avez validé l\'envoi de vos fichiers et ne pouvez plus effectuer de modifications.'
-            ], 422);
+        if ($configuration->status === 'file_sent' || $configuration->is_locked) {
+            return back()->with('error', 'Les fichiers ont été validés et ne peuvent plus être modifiés.');
         }
 
-        if ($configuration->user_id !== auth()->id()) {
-            return response()->json([
-                'error' => 'Vous n\'êtes pas autorisé à modifier ces fichiers.'
-            ], 403);
+        if ($file->print_configuration_id !== $configuration->id) {
+            return back()->with('error', 'Fichier non trouvé.');
         }
 
-        Storage::disk('public')->delete($file->file_path);
-        $file->delete();
+        try {
+            Storage::disk('public')->delete($file->file_path);
+            $file->delete();
+            return back()->with('success', 'Fichier supprimé avec succès');
 
-        return response()->json([
-            'message' => 'Fichier supprimé avec succès'
-        ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de la suppression du fichier : ' . $e->getMessage());
+            return back()->with('error', 'Une erreur est survenue lors de la suppression du fichier.');
+        }
     }
 
     public function validateFiles(Request $request, PrintConfiguration $configuration)
     {
-        if ($configuration->user_id !== auth()->id()) {
-            return response()->json([
-                'error' => 'Vous n\'êtes pas autorisé à modifier ces fichiers.'
-            ], 403);
+        if ($configuration->status === 'file_sent' || $configuration->is_locked) {
+            return back()->with('error', 'Les fichiers ont déjà été validés.');
+        }
+
+        if ($configuration->getFilesCount() === 0) {
+            return back()->with('error', 'Aucun fichier à valider.');
         }
 
         try {
-            if ($configuration->files()->count() === 0) {
-                return response()->json([
-                    'error' => 'Vous devez ajouter au moins un fichier avant de valider.'
-                ], 422);
-            }
-
             $configuration->update([
                 'status' => 'file_sent',
-                'step' => 2
+                'is_locked' => true
             ]);
 
-            return response()->json([
-                'message' => 'Les fichiers ont été validés avec succès.',
-                'redirect' => route('dossier.cabinet', $configuration)
-            ]);
+            return redirect()->route('dossier.cabinet', $configuration)
+                ->with('success', 'Fichiers validés avec succès');
 
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Une erreur est survenue lors de la validation des fichiers.'
-            ], 500);
+            Log::error('Erreur lors de la validation des fichiers : ' . $e->getMessage());
+            return back()->with('error', 'Une erreur est survenue lors de la validation des fichiers.');
         }
     }
 
     public function preview(PrintConfiguration $configuration, ConfigurationFile $file)
     {
-        if ($configuration->user_id !== auth()->id()) {
-            abort(403, 'Vous n\'êtes pas autorisé à voir ce fichier.');
-        }
-
         if ($file->print_configuration_id !== $configuration->id) {
             abort(404, 'Fichier non trouvé.');
         }

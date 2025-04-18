@@ -1,267 +1,250 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('Configurateur d\'impression') }}
-        </h2>
-    </x-slot>
+@extends('layouts.app')
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900 dark:text-gray-100">
-                    <form id="print-config" class="space-y-8" action="{{ route('products.save-configuration') }}" method="POST">
-                        @csrf
-                        
-                        <input type="hidden" name="name" value="Configuration du {{ now()->format('d/m/Y H:i') }}">
-                        
-                        <!-- Statut d'abonnement -->
-                        @if(auth()->user()->hasActiveSubscription())
-                            <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4">
-                                <div class="flex">
-                                    <div class="flex-shrink-0">
-                                        <svg class="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                        </svg>
-                                    </div>
-                                    <div class="ml-3">
-                                        <p class="font-medium">Vous êtes abonné !</p>
-                                        <p class="text-sm">Vous bénéficiez d'une réduction de 15% sur tous vos projets.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        @endif
-                        
-                        <!-- Nombre de pages -->
-                        <div class="space-y-2">
-                            <label for="pages" class="block text-sm font-medium">Nombre de pages</label>
-                            <div class="flex items-center space-x-4">
-                                <input type="number" name="pages" id="pages" min="1" 
-                                    value="{{ $configuration ? $configuration->pages : 1 }}"
-                                    class="mt-1 block w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    required>
-                                <span class="text-sm text-gray-500">
-                                    Réductions : 5% dès 100 pages, 10% dès 500 pages, 15% dès 1000 pages
-                                </span>
-                            </div>
-                        </div>
+@section('content')
+<div class="min-h-screen bg-gray-100 py-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h1 class="text-2xl font-bold text-gray-900 mb-6">Configuration d'impression</h1>
 
-                        <!-- Type d'impression -->
-                        <div class="space-y-2">
-                            <label class="block text-sm font-medium">Type d'impression</label>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="flex items-center">
-                                    <input type="radio" name="print_type" value="noir_blanc" id="noir_blanc" 
-                                        class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                        {{ !$configuration || $configuration->print_type === 'noir_blanc' ? 'checked' : '' }}>
-                                    <label for="noir_blanc" class="ml-3">Noir et blanc (0,10 € / page)</label>
-                                </div>
-                                <div class="flex items-center">
-                                    <input type="radio" name="print_type" value="couleur" id="couleur" 
-                                        class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                        {{ $configuration && $configuration->print_type === 'couleur' ? 'checked' : '' }}>
-                                    <label for="couleur" class="ml-3">Couleur (0,50 € / page)</label>
-                                </div>
-                            </div>
-                        </div>
+            <form id="configurationForm" action="{{ route('products.save-configuration') }}" method="POST" class="space-y-8">
+                @csrf
+                <input type="hidden" name="target_user_id" value="{{ $targetUserId }}">
 
-                        <!-- Type de papier -->
-                        <div class="space-y-2">
-                            <label class="block text-sm font-medium">Type de papier</label>
-                            <select name="paper_type" id="paper_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option value="standard" {{ !$configuration || $configuration->paper_type === 'standard' ? 'selected' : '' }}>Standard (pas de supplément)</option>
-                                <option value="recycle" {{ $configuration && $configuration->paper_type === 'recycle' ? 'selected' : '' }}>Recyclé (+0,02 € / page)</option>
-                                <option value="premium" {{ $configuration && $configuration->paper_type === 'premium' ? 'selected' : '' }}>Premium (+0,05 € / page)</option>
-                                <option value="photo" {{ $configuration && $configuration->paper_type === 'photo' ? 'selected' : '' }}>Photo (+0,10 € / page)</option>
-                            </select>
+                <!-- Informations de base -->
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Informations de base</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-gray-700">Nom de la configuration</label>
+                            <input type="text" name="name" id="name" value="{{ old('name', $configuration->name ?? '') }}" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            @error('name')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
                         </div>
-
-                        <!-- Format -->
-                        <div class="space-y-2">
-                            <label class="block text-sm font-medium">Format</label>
-                            <select name="format" id="format" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option value="A4" {{ !$configuration || $configuration->format === 'A4' ? 'selected' : '' }}>A4 (standard)</option>
-                                <option value="A3" {{ $configuration && $configuration->format === 'A3' ? 'selected' : '' }}>A3 (+0,50 € / page)</option>
-                                <option value="A5" {{ $configuration && $configuration->format === 'A5' ? 'selected' : '' }}>A5 (-0,05 € / page)</option>
-                            </select>
+                        <div>
+                            <label for="pages" class="block text-sm font-medium text-gray-700">Nombre de pages</label>
+                            <input type="number" name="pages" id="pages" value="{{ old('pages', $configuration->pages ?? '') }}" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            @error('pages')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
                         </div>
-
-                        <!-- Type de reliure -->
-                        <div class="space-y-2">
-                            <label class="block text-sm font-medium">Type de reliure</label>
-                            <select name="binding_type" id="binding_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option value="sans_reliure" {{ !$configuration || $configuration->binding_type === 'sans_reliure' ? 'selected' : '' }}>Sans reliure (gratuit)</option>
-                                <option value="agrafage" {{ $configuration && $configuration->binding_type === 'agrafage' ? 'selected' : '' }}>Agrafage (2,00 €)</option>
-                                <option value="spirale" {{ $configuration && $configuration->binding_type === 'spirale' ? 'selected' : '' }}>Spirale (5,00 €)</option>
-                                <option value="dos_colle" {{ $configuration && $configuration->binding_type === 'dos_colle' ? 'selected' : '' }}>Dos collé (7,00 €)</option>
-                            </select>
-                        </div>
-
-                        <!-- Type de dépôt -->
-                        <div class="space-y-2">
-                            <label class="block text-sm font-medium">Type de dépôt</label>
-                            <select name="delivery_type" id="delivery_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option value="retrait_magasin" {{ !$configuration || $configuration->delivery_type === 'retrait_magasin' ? 'selected' : '' }}>Retrait en magasin (gratuit)</option>
-                                <option value="livraison_standard" {{ $configuration && $configuration->delivery_type === 'livraison_standard' ? 'selected' : '' }}>Livraison standard (5,00 €)</option>
-                                <option value="livraison_express" {{ $configuration && $configuration->delivery_type === 'livraison_express' ? 'selected' : '' }}>Livraison express (15,00 €)</option>
-                            </select>
-                        </div>
-
-                        <!-- Nom de la configuration -->
-                        <div class="space-y-2">
-                            <label for="configuration_name" class="block text-sm font-medium">Nom de la configuration</label>
-                            <input type="text" name="configuration_name" id="configuration_name"
-                                value="{{ $configuration ? $configuration->name : '' }}"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                placeholder="Ma configuration d'impression">
-                        </div>
-
-                        <!-- Récapitulatif détaillé -->
-                        <div class="mt-8 p-6 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-4">
-                            <h3 class="text-lg font-medium">Récapitulatif détaillé</h3>
-                            <div class="space-y-2">
-                                <div class="flex justify-between">
-                                    <span>Prix par page :</span>
-                                    <span id="price-per-page">0,00 €</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span>Prix total des pages :</span>
-                                    <span id="total-pages-price">0,00 €</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span>Réduction appliquée :</span>
-                                    <span id="discount-applied">0%</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span>Prix de la reliure :</span>
-                                    <span id="binding-price">0,00 €</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span>Prix de la livraison :</span>
-                                    <span id="delivery-price">0,00 €</span>
-                                </div>
-                                <div class="flex justify-between text-lg font-bold pt-4 border-t">
-                                    <span>Prix total :</span>
-                                    <span id="estimated-price" class="text-2xl text-indigo-600 dark:text-indigo-400">0,00 €</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Boutons -->
-                        <div class="flex justify-end space-x-4">
-                            <button type="button" onclick="calculatePrice()" 
-                                class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                                Calculer le prix
-                            </button>
-                            <button type="button" onclick="proceedToPayment()" 
-                                class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
-                                Payer
-                            </button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
-            </div>
+
+                <!-- Options d'impression -->
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Options d'impression</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="print_type" class="block text-sm font-medium text-gray-700">Type d'impression</label>
+                            <select name="print_type" id="print_type" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="noir_blanc" {{ old('print_type', $configuration->print_type ?? '') == 'noir_blanc' ? 'selected' : '' }}>Noir et blanc</option>
+                                <option value="couleur" {{ old('print_type', $configuration->print_type ?? '') == 'couleur' ? 'selected' : '' }}>Couleur</option>
+                            </select>
+                            @error('print_type')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div>
+                            <label for="paper_type" class="block text-sm font-medium text-gray-700">Type de papier</label>
+                            <select name="paper_type" id="paper_type" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                @foreach($paperTypes as $type)
+                                    <option value="{{ $type }}" {{ old('paper_type', $configuration->paper_type ?? '') == $type ? 'selected' : '' }}>
+                                        {{ ucfirst($type) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('paper_type')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div>
+                            <label for="format" class="block text-sm font-medium text-gray-700">Format</label>
+                            <select name="format" id="format" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                @foreach($formats as $format)
+                                    <option value="{{ $format }}" {{ old('format', $configuration->format ?? '') == $format ? 'selected' : '' }}>
+                                        {{ $format }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('format')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div>
+                            <label for="binding_type" class="block text-sm font-medium text-gray-700">Type de reliure</label>
+                            <select name="binding_type" id="binding_type" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="agrafage" {{ old('binding_type', $configuration->binding_type ?? '') == 'agrafage' ? 'selected' : '' }}>Agrafage</option>
+                                <option value="spirale" {{ old('binding_type', $configuration->binding_type ?? '') == 'spirale' ? 'selected' : '' }}>Spirale</option>
+                                <option value="dos_colle" {{ old('binding_type', $configuration->binding_type ?? '') == 'dos_colle' ? 'selected' : '' }}>Dos collé</option>
+                                <option value="sans_reliure" {{ old('binding_type', $configuration->binding_type ?? '') == 'sans_reliure' ? 'selected' : '' }}>Sans reliure</option>
+                            </select>
+                            @error('binding_type')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Livraison -->
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Livraison</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="delivery_type" class="block text-sm font-medium text-gray-700">Type de livraison</label>
+                            <select name="delivery_type" id="delivery_type" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="retrait_magasin" {{ old('delivery_type', $configuration->delivery_type ?? '') == 'retrait_magasin' ? 'selected' : '' }}>Retrait en magasin</option>
+                                <option value="livraison_standard" {{ old('delivery_type', $configuration->delivery_type ?? '') == 'livraison_standard' ? 'selected' : '' }}>Livraison standard</option>
+                                <option value="livraison_express" {{ old('delivery_type', $configuration->delivery_type ?? '') == 'livraison_express' ? 'selected' : '' }}>Livraison express</option>
+                            </select>
+                            @error('delivery_type')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Résumé et prix -->
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">Résumé et prix</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Prix total</label>
+                            <div class="mt-1 text-2xl font-bold text-indigo-600" id="totalPrice">0.00 €</div>
+                            <input type="hidden" name="total_price" id="totalPriceInput" value="0.00">
+                        </div>
+                        @if($hasSubscription)
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Avec abonnement</label>
+                            <div class="mt-1 text-2xl font-bold text-green-600" id="subscriptionPrice">0.00 €</div>
+                            <input type="hidden" name="is_subscription" value="1">
+                        </div>
+                        @endif
+                    </div>
+                </div>
+
+                <!-- Boutons d'action -->
+                <div class="flex justify-end space-x-4">
+                    <a href="{{ route('dashboard') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        Annuler
+                    </a>
+                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        Valider la configuration
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
+</div>
 
-    @push('scripts')
-    <script type="text/javascript">
-        document.addEventListener('DOMContentLoaded', function() {
-            // Fonction de calcul du prix
-            window.calculatePrice = function() {
-                const formData = new FormData(document.getElementById('print-config'));
-                const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                
-                fetch('{{ route("products.calculate") }}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRF-TOKEN': token
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('estimated-price').textContent = data.price + ' €';
-                    document.getElementById('price-per-page').textContent = data.details.price_per_page + ' €';
-                    document.getElementById('total-pages-price').textContent = data.details.pages + ' €';
-                    document.getElementById('binding-price').textContent = data.details.binding + ' €';
-                    document.getElementById('delivery-price').textContent = data.details.delivery + ' €';
-                    document.getElementById('discount-applied').textContent = data.details.discount_applied;
-                })
-                .catch(error => {
-                    console.error('Erreur:', error);
-                    alert('Erreur lors du calcul du prix');
-                });
-            };
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('configurationForm');
+    const totalPriceElement = document.getElementById('totalPrice');
+    const totalPriceInput = document.getElementById('totalPriceInput');
+    const subscriptionPriceElement = document.getElementById('subscriptionPrice');
+    const hasSubscription = @json($hasSubscription);
 
-            // Fonction pour procéder au paiement
-            window.proceedToPayment = function() {
-                // Vérifier que tous les champs requis sont remplis
-                const requiredFields = ['configuration_name', 'pages', 'print_type', 'binding_type', 'delivery_type', 'paper_type', 'format'];
-                for (const field of requiredFields) {
-                    const element = field === 'print_type' 
-                        ? document.querySelector('input[name="print_type"]:checked')
-                        : document.getElementById(field);
-                    
-                    if (!element || !element.value) {
-                        alert(`Le champ ${field} est requis`);
-                        return;
-                    }
-                }
+    // Fonction pour calculer le prix
+    function calculatePrice() {
+        const pages = parseInt(document.getElementById('pages').value) || 0;
+        const printType = document.getElementById('print_type').value;
+        const paperType = document.getElementById('paper_type').value;
+        const format = document.getElementById('format').value;
+        const bindingType = document.getElementById('binding_type').value;
+        const deliveryType = document.getElementById('delivery_type').value;
 
-                // Si le nom n'est pas fourni, générer un nom par défaut
-                const name = document.getElementById('configuration_name').value || `Configuration du ${new Date().toLocaleDateString()}`;
+        // Prix de base par page selon le type d'impression
+        const basePricePerPage = printType === 'noir_blanc' ? 0.10 : 0.50;
+        
+        // Prix du papier
+        const paperPrices = {
+            'standard': 0.00,
+            'recycle': 0.02,
+            'premium': 0.05,
+            'photo': 0.10
+        };
+        
+        // Prix des formats
+        const formatPrices = {
+            'A4': 0.00,
+            'A3': 0.50,
+            'A5': -0.05
+        };
+        
+        // Prix des reliures
+        const bindingPrices = {
+            'agrafage': 2.00,
+            'spirale': 5.00,
+            'dos_colle': 7.00,
+            'sans_reliure': 0.00
+        };
+        
+        // Prix des livraisons
+        const deliveryPrices = {
+            'retrait_magasin': 0.00,
+            'livraison_standard': 5.00,
+            'livraison_express': 15.00
+        };
 
-                // Récupérer les valeurs du formulaire
-                const formData = {
-                    name: name,
-                    pages: document.getElementById('pages').value,
-                    print_type: document.querySelector('input[name="print_type"]:checked').value,
-                    binding_type: document.getElementById('binding_type').value,
-                    delivery_type: document.getElementById('delivery_type').value,
-                    paper_type: document.getElementById('paper_type').value,
-                    format: document.getElementById('format').value,
-                    total_price: document.getElementById('estimated-price').textContent.replace(' €', '')
-                };
+        // Calcul du prix total
+        let totalPrice = (basePricePerPage + paperPrices[paperType] + formatPrices[format]) * pages;
+        totalPrice += bindingPrices[bindingType] + deliveryPrices[deliveryType];
 
-                // Envoyer les données au serveur
-                fetch('/products/save-configuration', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                    },
-                    body: JSON.stringify(formData)
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        return response.json().then(data => {
-                            throw new Error(data.message || 'Erreur lors de la sauvegarde de la configuration');
-                        });
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        // Rediriger vers la page de paiement avec l'ID de la configuration
-                        window.location.href = `/payment/${data.configuration_id}`;
-                    } else {
-                        throw new Error(data.message || 'Erreur lors de la sauvegarde de la configuration');
-                    }
-                })
-                .catch(error => {
-                    console.error('Erreur:', error);
-                    alert(error.message);
-                });
-            };
+        // Mise à jour de l'affichage et du champ caché
+        totalPriceElement.textContent = totalPrice.toFixed(2) + ' €';
+        totalPriceInput.value = totalPrice.toFixed(2);
 
-            // Ajouter les écouteurs d'événements
-            document.querySelectorAll('#print-config input, #print-config select').forEach(element => {
-                element.addEventListener('change', calculatePrice);
-            });
+        if (hasSubscription) {
+            const subscriptionPrice = totalPrice * 0.85; // 15% de réduction
+            subscriptionPriceElement.textContent = subscriptionPrice.toFixed(2) + ' €';
+        }
+    }
 
-            // Calculer le prix initial
-            calculatePrice();
+    // Écouteurs d'événements pour le calcul automatique
+    ['pages', 'print_type', 'paper_type', 'format', 'binding_type', 'delivery_type'].forEach(id => {
+        document.getElementById(id).addEventListener('change', calculatePrice);
+    });
+
+    // Calcul initial
+    calculatePrice();
+
+    // Gestion de la soumission du formulaire
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Vérifier que tous les champs requis sont remplis
+        const requiredFields = ['name', 'pages', 'print_type', 'paper_type', 'format', 'binding_type', 'delivery_type'];
+        let isValid = true;
+        
+        requiredFields.forEach(field => {
+            const element = document.getElementById(field);
+            if (!element.value) {
+                isValid = false;
+                element.classList.add('border-red-500');
+            } else {
+                element.classList.remove('border-red-500');
+            }
         });
-    </script>
-    @endpush
-</x-app-layout> 
+
+        if (!isValid) {
+            alert('Veuillez remplir tous les champs requis');
+            return;
+        }
+
+        // Soumettre le formulaire
+        this.submit();
+    });
+});
+</script>
+@endpush
+@endsection 
+

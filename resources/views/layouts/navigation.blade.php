@@ -24,6 +24,9 @@
                                 </span>
                             @endif
                         </x-nav-link>
+                        <x-nav-link :href="route('admin.settings.index')" :active="request()->routeIs('admin.settings.*')">
+                            {{ __('Settings') }}
+                        </x-nav-link>
                     @endif
                 </div>
             </div>
@@ -80,6 +83,14 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+            @if(auth()->user()->isAdmin())
+                <x-responsive-nav-link :href="route('admin.notifications.index')" :active="request()->routeIs('admin.notifications.*')">
+                    {{ __('Notifications') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.settings.index')" :active="request()->routeIs('admin.settings.*')">
+                    {{ __('Settings') }}
+                </x-responsive-nav-link>
+            @endif
         </div>
 
         <!-- Responsive Settings Options -->
